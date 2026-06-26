@@ -1,0 +1,45 @@
+{
+  "_comment": "Copy this file to Config.json and fill in your values. Never commit Config.json to a public repository.",
+
+  "ollama_host": "http://localhost:11434",
+  "ollama_model": "gemma3:12b",
+
+  "email_sender": "you@gmail.com",
+  "email_password": "xxxx xxxx xxxx xxxx",
+  "email_recipient": "you@gmail.com",
+  "smtp_host": "smtp.gmail.com",
+  "smtp_port": 587,
+
+  "topics": [
+    "AI policy",
+    "quantum computing",
+    "digital ethics",
+    "philosophy of technology",
+    "computer science research"
+  ],
+
+  "exclude_sources": [
+    "TechCrunch",
+    "The Verge",
+    "Wikipedia"
+  ],
+
+  "preferred_sources": [
+    "arXiv",
+    "MIT Technology Review",
+    "Nature",
+    "Scientific American",
+    "Harvard",
+    "Oxford"
+  ],
+
+  "languages": ["en"],
+
+  "digest_language": "English",
+
+  "num_articles": 8,
+
+  "tone": "academic",
+
+  "extra_instructions": "Prioritise papers with concrete ethical and philosophical implications."
+}

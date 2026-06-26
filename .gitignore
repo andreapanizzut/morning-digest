@@ -1,0 +1,19 @@
+# Personal configuration (may contain passwords)
+Config.json
+*.local.json
+.env
+
+# Runtime output
+digest.log
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
