@@ -222,6 +222,62 @@ def search_articles(topics: list[str], days: int = 3, max_results_per_topic: int
     log.info("Total articles collected: %d", len(all_results))
     return all_results
 
+
+def validate_urls(articles: list[dict], timeout: int = 6) -> list[dict]:
+    """Drop articles whose URL does not respond with a 2xx or 3xx status code.
+    Falls back to a GET request if HEAD is blocked (403/405), as some servers
+    behind Cloudflare or paywalls reject HEAD unconditionally.
+    """
+    import urllib.request
+    import urllib.error
+
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; MorningDigestBot/1.0)"}
+
+    def check(url: str, method: str) -> int:
+        req = urllib.request.Request(url, method=method, headers=headers)
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.status
+
+    valid = []
+    for a in articles:
+        url = a["url"]
+        try:
+            status = check(url, "HEAD")
+            if status < 400:
+                valid.append(a)
+            elif status in (403, 405):
+                # Server blocked HEAD — retry with GET
+                try:
+                    status = check(url, "GET")
+                    if status < 400:
+                        log.info("  [ok-get] HEAD blocked, GET succeeded: %s", url)
+                        valid.append(a)
+                    else:
+                        log.info("  [dead] HTTP %d (GET fallback): %s", status, url)
+                except Exception:
+                    log.info("  [dead] GET fallback also failed: %s", url)
+            else:
+                log.info("  [dead] HTTP %d: %s", status, url)
+        except urllib.error.HTTPError as e:
+            if e.code in (403, 405):
+                # HEAD raised HTTPError — retry with GET
+                try:
+                    status = check(url, "GET")
+                    if status < 400:
+                        log.info("  [ok-get] HEAD blocked, GET succeeded: %s", url)
+                        valid.append(a)
+                    else:
+                        log.info("  [dead] HTTP %d (GET fallback): %s", status, url)
+                except Exception:
+                    log.info("  [dead] GET fallback also failed: %s", url)
+            else:
+                log.info("  [dead] HTTP %d: %s", e.code, url)
+        except Exception as e:
+            log.info("  [dead] Unreachable (%s): %s", type(e).__name__, url)
+
+    log.info("URL validation: %d/%d articles reachable", len(valid), len(articles))
+    return valid
+
 # ---------------------------------------------------------------------------
 # Article archive (cross-run deduplication)
 # ---------------------------------------------------------------------------
@@ -545,17 +601,22 @@ def main() -> None:
         if not articles:
             raise RuntimeError("No articles found from web search.")
 
-        # 3. Filter already-seen articles
+        # 3. Validate URLs — drop dead links
+        articles = validate_urls(articles)
+        if not articles:
+            raise RuntimeError("No reachable articles found after URL validation.")
+
+        # 4. Filter already-seen articles
         articles, skipped = filter_new_articles(articles, archive)
         log.info("New articles: %d | Skipped (already seen): %d", len(articles), skipped)
         if not articles:
             raise RuntimeError("All articles found have already been processed in a previous run.")
 
-        # 4. Build prompt
+        # 5. Build prompt
         user_prompt = build_full_prompt(articles, cfg)
         log.info("Prompt built (%d characters)", len(user_prompt))
 
-        # 5. Call Ollama
+        # 6. Call Ollama
         digest_md = call_ollama(cfg, user_prompt)
 
         if dry_run:
@@ -569,14 +630,14 @@ def main() -> None:
             log.info("Dry run complete — archive not updated, no email sent.")
             return
 
-        # 6. Update archive (only after a successful Ollama response)
+        # 7. Update archive (only after a successful Ollama response)
         archive = add_to_archive(articles, archive)
         save_archive(archive)
 
-        # 7. Save Markdown
+        # 8. Save Markdown
         md_path = save_markdown(digest_md, cfg)
 
-        # 8. Send email
+        # 9. Send email
         html_body = md_to_html(digest_md)
         send_email(subject, html_body, cfg)
 
